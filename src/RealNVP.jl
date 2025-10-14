@@ -23,8 +23,8 @@ module RealNVP
         end
 
         function Lux.initialstates(rng::AbstractRNG, l::AffineEOCoupling)
-            chk = [iseven(sum(Tuple(I))) for I in CartesianIndices(l.dims)]
-            mask = l.iseven ? chk : .!chk
+            parity = l.iseven ? iseven : isodd
+            mask = [parity(sum(Tuple(I))) for I in CartesianIndices(l.dims)]
 
             return (; mode=:forward, mask , net=Lux.initialstates(rng, l.net))
         end
@@ -48,7 +48,7 @@ module RealNVP
             log_det = log_det .* st.mask
 
             # Sum local log_det (leave batch dim untouched)
-            ddims = 1:ndims(st.mask) |> collect |> Tuple
+            ddims = Tuple(1:ndims(st.mask))
             logdetJ += dsum(log_det; dims=ddims)
 
             return (ϕ, logdetJ), merge(st, (net=st_net,))
@@ -66,10 +66,10 @@ module RealNVP
     ## --------------------------------- loss function --------------------------------- 
         log_N01(x::AbstractArray{T}) where {T} = -T(0.5 * log(2π)) .- T(0.5) .* abs2.(x)
 
-        function density_loss(model, ps, st, x::AbstractArray{T}) where T
+        function density_loss(model, ps, st, x::AbstractArray{T,N}) where {T,N}
             # Infer dimensionality of input and batch dimension
-            batch_dim = size(x,ndims(x))
-            ddims = 1:(ndims(x)-1) |> collect |> Tuple
+            batch_dim = size(x,N)
+            ddims = Tuple(1:(N-1))
 
             # Forward pass
             zero_batch = zeros_like(x, batch_dim)
@@ -83,5 +83,5 @@ module RealNVP
     ## ----------------------------------------------------------------------------------
 
 
-    export biject, AffineEOCoupling, log_N01, density_loss, dsum
+    export biject, AffineEOCoupling, log_N01, density_loss, dsum, pass_inverse
 end
