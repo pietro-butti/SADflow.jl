@@ -2,5 +2,6 @@
 .vscode/*
 
 .gitignore
+test/phi4_source.jl
 
 LocalPreferences.toml

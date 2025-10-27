@@ -31,6 +31,8 @@ module RealNVP
 
         apply_and_log_det(::Val{:forward}, s, t, z) = (z .* exp.(s) .+ t, s)
         apply_and_log_det(::Val{:inverse}, s, t, z) = ((z .- t) ./ exp.(s), -s)
+        # apply_and_log_det(::Val{:forward}, s, t, z) = (z .* softplus.(s) .+ t, log.(softplus.(s)))
+        # apply_and_log_det(::Val{:inverse}, s, t, z) = ((z .- t) ./ softplus.(s), -log.(softplus.(s)))
 
         function (cl::AffineEOCoupling)((ϕ, logdetJ), ps, st)
             # Split active/passive according to mask
