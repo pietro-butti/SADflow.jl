@@ -31,8 +31,6 @@ module RealNVP
 
         apply_and_log_det(::Val{:forward}, s, t, z) = (z .* exp.(s) .+ t, s)
         apply_and_log_det(::Val{:inverse}, s, t, z) = ((z .- t) ./ exp.(s), -s)
-        # apply_and_log_det(::Val{:forward}, s, t, z) = (z .* softplus.(s) .+ t, log.(softplus.(s)))
-        # apply_and_log_det(::Val{:inverse}, s, t, z) = ((z .- t) ./ softplus.(s), -log.(softplus.(s)))
 
         function (cl::AffineEOCoupling)((ϕ, logdetJ), ps, st)
             # Split active/passive according to mask
@@ -55,6 +53,24 @@ module RealNVP
 
             return (ϕ, logdetJ), merge(st, (net=st_net,))
         end
+
+        function (cl::AffineEOCoupling)(ϕ::AbstractArray{T,N}, ps, st) where {T,N}
+            # Split active/passive according to mask
+            ϕ_active = ifelse.(st.mask, ϕ, zero(ϕ))
+            ϕ_frozen = ifelse.(st.mask, zero(ϕ), ϕ)
+
+            # Compute scale and shift
+            (logs, t), st_net = cl.net(ϕ_frozen, ps.net, st.net)
+
+            # Affine coupling layer
+            ϕ_active, _ = apply_and_log_det(Val(st.mode), logs, t, ϕ_active)
+
+            # Mount back dofs        
+            ϕ = ifelse.(st.mask, ϕ_active, ϕ)
+
+            return ϕ, merge(st, (net=st_net,))
+        end
+
     ## ----------------------------------------------------------------
 
     pass_inverse(model,ps,st) = (z,logdetJ) -> begin

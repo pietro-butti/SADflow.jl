@@ -95,6 +95,6 @@ using Zygote
 
 plot(metrics.ess)
 # plot(metrics.hloss,yscale=:log10)
-plot(log.(metrics.hloss .- minimum(metrics.hloss)))
+# plot(log.(metrics.hloss .- minimum(metrics.hloss)))
 
 
