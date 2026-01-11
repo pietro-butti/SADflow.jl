@@ -5,20 +5,18 @@ using Lux, NNlib, MLUtils, Optimisers
 using Zygote
 
 ## ============= Function to compute the action =================
-    staple_sum(ϕ::AbstractArray{T,2}) where T = 
-        circshift(ϕ,(0,1)) .+ 
-        circshift(ϕ,(1,0))
-
-
-    staple_sum(ϕ::AbstractArray{T,4}) where T = 
-        circshift(ϕ,(1,0,0,0)) .+ 
-        circshift(ϕ,(0,1,0,0)) .+ 
-        circshift(ϕ,(0,0,1,0)) .+ 
-        circshift(ϕ,(0,0,0,1)) 
+    neighbor_sum(ϕ::AbstractArray{T,4}) where T = 
+        circshift(ϕ,(-1,0,0,0)) .+ 
+        circshift(ϕ,(0,-1,0,0)) 
+    
+    neighbor_sum(ϕ::AbstractArray{T,6}) where T = 
+        circshift(ϕ,(-1,0,0,0,0,0)) .+ 
+        circshift(ϕ,(0,-1,0,0,0,0)) .+ 
+        circshift(ϕ,(0,0,-1,0,0,0)) .+ 
+        circshift(ϕ,(0,0,0,-1,0,0))
 
     Actionλϕ⁴(ϕ::AbstractArray{T,N},λ::T,κ::T) where {T,N} = (
-        ϕ.^2 .+ λ .* (ϕ.^2 .- one(T)).^2 .+
-        -2κ .* ϕ .* staple_sum(ϕ)
+        -2κ .* ϕ .* neighbor_sum(ϕ) .+ ϕ.^2 .+ λ .* (ϕ.^2 .- T(1)).^2
     ) |> x->sum(x; dims=1:N-1)
 ## ===============================================================
 
@@ -95,6 +93,6 @@ using Zygote
 
 plot(metrics.ess)
 # plot(metrics.hloss,yscale=:log10)
-# plot(log.(metrics.hloss .- minimum(metrics.hloss)))
+plot(log.(metrics.hloss .- minimum(metrics.hloss)))
 
 
