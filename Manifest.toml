@@ -2,7 +2,7 @@
 
 julia_version = "1.11.4"
 manifest_format = "2.0"
-project_hash = "84d192a5bccd074768a20c67a52658f2a03393cf"
+project_hash = "ec332dd3c1b883ae9b517927835c1d1d3c213448"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "27cecae79e5cc9935255f90c53bb831cc3c870d7"
@@ -647,19 +647,20 @@ version = "1.22.1"
 
 [[deps.LuxCore]]
 deps = ["DispatchDoctor", "Random", "SciMLPublic"]
-git-tree-sha1 = "ee3794a2ca3022bc066b5fb87b135c1d5f3b1cb7"
+git-tree-sha1 = "c5d3f799e85287cee5ff569595d107edb293ec32"
 uuid = "bb33d45b-7691-41d6-9220-0943567d0623"
-version = "1.4.2"
+version = "1.5.0"
 
     [deps.LuxCore.extensions]
-    LuxCoreArrayInterfaceReverseDiffExt = ["ArrayInterface", "ReverseDiff"]
-    LuxCoreArrayInterfaceTrackerExt = ["ArrayInterface", "Tracker"]
-    LuxCoreChainRulesCoreExt = "ChainRulesCore"
-    LuxCoreEnzymeCoreExt = "EnzymeCore"
-    LuxCoreFunctorsExt = "Functors"
-    LuxCoreMLDataDevicesExt = ["Adapt", "MLDataDevices"]
-    LuxCoreReactantExt = "Reactant"
-    LuxCoreSetfieldExt = "Setfield"
+    ArrayInterfaceReverseDiffExt = ["ArrayInterface", "ReverseDiff"]
+    ArrayInterfaceTrackerExt = ["ArrayInterface", "Tracker"]
+    ChainRulesCoreExt = "ChainRulesCore"
+    EnzymeCoreExt = "EnzymeCore"
+    FluxExt = "Flux"
+    FunctorsExt = "Functors"
+    MLDataDevicesExt = ["Adapt", "MLDataDevices"]
+    ReactantExt = "Reactant"
+    SetfieldExt = "Setfield"
 
     [deps.LuxCore.weakdeps]
     Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -1243,16 +1244,16 @@ weakdeps = ["LLVM"]
 
 [[deps.WeightInitializers]]
 deps = ["ArgCheck", "ConcreteStructs", "GPUArraysCore", "LinearAlgebra", "Random", "SpecialFunctions", "Statistics"]
-git-tree-sha1 = "c0a2569d1e88648616450ad065d1a5a0138a6d02"
+git-tree-sha1 = "5d10e152acc3ac4cf5ec24a6425f01976ad184a7"
 uuid = "d49dbf32-c5c2-4618-8acc-27bb2598ef2d"
-version = "1.2.1"
+version = "1.3.0"
 
     [deps.WeightInitializers.extensions]
-    WeightInitializersAMDGPUExt = "AMDGPU"
-    WeightInitializersCUDAExt = "CUDA"
-    WeightInitializersChainRulesCoreExt = "ChainRulesCore"
-    WeightInitializersGPUArraysExt = "GPUArrays"
-    WeightInitializersReactantExt = "Reactant"
+    AMDGPUExt = "AMDGPU"
+    CUDAExt = "CUDA"
+    ChainRulesCoreExt = "ChainRulesCore"
+    GPUArraysExt = "GPUArrays"
+    ReactantExt = "Reactant"
 
     [deps.WeightInitializers.weakdeps]
     AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
