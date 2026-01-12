@@ -7,3 +7,6 @@ LocalPreferences.toml
 
 .local_sketches
 .local_sketches/*
+
+applications/originals
+applications/originals/*
