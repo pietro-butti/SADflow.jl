@@ -60,6 +60,8 @@ rng = Xoshiro(SEED)
         BSIZE = 32
     # --------------------------
 
+    setloss(l,k,J; x₀=1) = (m,p,s,z) -> phi4loss_source(m,p,s,z,l,k,J;x₀=x₀)
+
     LOSS = setloss(λ,κ,J)
     NSAMPLES = last(size(ϕ))
 
