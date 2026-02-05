@@ -51,7 +51,9 @@ module FourierFeatures
             kernel = sum(ps.weight .* st.stencil.w)
             kernel = reshape(kernel, size(kernel)...,1,1)
 
-            z = NNlib.pad_circular(x,(2,0,2,0))   # only valid for 2 dimensions with kernelsize=3
+            p = (l.kernel_dim - 1) ÷ 2          # Lk must be odd
+
+            z = NNlib.pad_circular(x,(p,p,p,p))   # only valid for 2 dimensions with kernelsize=3
             z = NNlib.conv(z,kernel)              
 
             return z, st
@@ -64,7 +66,8 @@ module FourierFeatures
             conv::C
             init_freq::F1
         end
-        FourierFeature(n::Int; init_freq=glorot_normal) = FourierFeature(LatConv2D(n), init_freq)
+        FourierFeature(n::Int; init_freq=glorot_normal,init_weight=zeros32) = 
+            FourierFeature(LatConv2D(n; init_weight=init_weight), init_freq)
 
         LuxCore.initialparameters(rng::AbstractRNG, f::FourierFeature) = (;
             conv = LuxCore.initialparameters(rng,f.conv),
@@ -79,19 +82,29 @@ module FourierFeatures
         #       ϕ -> k ⋆ sin.(ω .* ϕ)
         function (f::FourierFeature)(x,ps,st)
             z = sin.(only(ps.freq) .* x)
-            z,st_conv = f.conv(x,ps.conv, st.conv)
+            z,st_conv = f.conv(z, ps.conv, st.conv)
             return z, merge(st, (; conv=st_conv))
         end
         # -----------------------------------------
 
-
-        FourierConv(n_ch::Int,ch_dim::Int) = BranchLayer(
+        
+        FourierLatConv(n_ch::Int,ch_dim::Int) = BranchLayer(
             [FourierFeature(ch_dim) for _ in 1:n_ch]...
             ; fusion= (xs...) -> reduce(+,xs)
         )
+        # --------------- Divergence ---------------
+            div_FourierFeature(ps,x::AbstractArray{T,N}) where {T,N} = begin
+                ω = only(ps.freq)
+                k00 = first(ps.conv.weight)
+                k00 * ω .* sum( cos.(ω .* x), dims=collect(1:N-1) )[:]
+            end
 
+            div_FourierLatConv(ps, x) = mapreduce(p->div_FourierFeature(p, x), +, ps)
+        # ------------------------------------------
+            
     ## ===========================================================================
 
     export LatConv2D, FourierFeature, FourierLatConv
+    export div_FourierFeature, div_FourierLatConv
 
 end

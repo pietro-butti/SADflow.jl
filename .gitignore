@@ -10,3 +10,7 @@ LocalPreferences.toml
 
 applications/originals
 applications/originals/*
+
+
+applications/plots
+applications/plots/*

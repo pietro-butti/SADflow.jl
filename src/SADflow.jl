@@ -7,9 +7,16 @@ module SADflow
     include("FourierFeatures.jl")
         using .FourierFeatures
         export LatConv2D, FourierFeature, FourierLatConv
-    
-    include("Losses.jl")
-        using .Losses
+        export div_FourierFeature, div_FourierLatConv
+
+    include("FourierNeuralOperator.jl")
+        using .FourierNeuralOperator
+        export SpectralConv, FourierNeuralLayer, FNO
+
+
+    include("Utils.jl")
+        using .Utils
+        export show_keys
         export neighbor_sum, staple_sum, Actionλϕ⁴, Forceλϕ⁴, fHf
         export batched_jvp, trace_J, trace_J2
         export Stein, score_mismatch

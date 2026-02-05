@@ -1,6 +1,20 @@
-module Losses
+module Utils
     using Lux, NNlib, MLUtils
-    using StatsBase
+    using StatsBase, LinearAlgebra
+
+    function show_keys(nt::NamedTuple, prefix="", is_last=true)
+        ks = collect(keys(nt))
+        for (i, key) in enumerate(ks)
+            connector = i == length(ks) ? "└─ " : "├─ "
+            println(prefix, connector, key)
+            
+            value = getfield(nt, key)
+            if value isa NamedTuple
+                extension = i == length(ks) ? "   " : "│  "
+                show_keys(value, prefix * extension, i == length(ks))
+            end
+        end
+    end
 
     ## ======================= λϕ⁴-specific func =========================
         neighbor_sum(ϕ::AbstractArray{T,4}) where T = 
@@ -29,10 +43,10 @@ module Losses
         ) |> x->sum(x; dims=1:N-1)
 
         Forceλϕ⁴(ϕ::AbstractArray{T,N},λ::T,κ::T) where {T,N} =
-            -2κ .* staple_sum(ϕ) .+ 2ϕ + 4λ .* (ϕ.^2 .- T(1)) .* ϕ
+            -2κ .* staple_sum(ϕ) .+ 2ϕ .+ 4λ .* (ϕ.^2 .- T(1)) .* ϕ
 
         fHf(ϕ::AbstractArray{T,N},f::AbstractArray{T,N},λ::T,κ::T) where {T,N} = (
-            -4κ .* f .* neighbor_sum(f) .+ (T(2) - 4λ .+ 12λ .* ϕ .^ 2) .* f .^2
+            -2κ .* f .* staple_sum(f) .+ (T(2) - 4λ .+ 12λ .* ϕ .^ 2) .* f .^2
         ) |> x->sum(x; dims=1:N-1)
     ## ===================================================================
 
@@ -71,7 +85,6 @@ module Losses
     function score_mismatch(f::AbstractArray{T,N}, x₀::Int) where {T,N}
         return .- sum.(eachslice(selectdim(f,1,x₀),dims=N-1)) 
     end
-    ##
 
 
     function phi4loss_generate(model, ps, st, z::AbstractArray{T,N}, λ::T,κ::T) where {T,N}
@@ -105,7 +118,7 @@ module Losses
         return mean(logq .- logp), st, (; ess=ess)
     end
 
-    function phi4loss_OTnorm(model,ps,st,ϕ::AbstractArray{T,N}, λ::T, κ::T, nsources::Int, x₀::Int; O_av=nothin) where {T,N}
+    function phi4loss_OTnorm(model,ps,st,ϕ::AbstractArray{T,N}, λ::T, κ::T, nsources::Int, x₀::Int; O_av=nothing) where {T,N}
         f,Tr_f = Stein(model,ps,st,ϕ,λ,κ,nsources) # Stein operator
 
         # Control variates
@@ -113,7 +126,7 @@ module Losses
         Op_av = isnothing(O_av) ? mean(O) : O_av
         Ō = O .- Op_av
 
-        return norm((Tr_f .- Ō).^2,2), st, (;)
+        return norm((Tr_f .- Ō),2), st, (;)
     end
 
     function phi4loss_KL2(model,ps,st,ϕ::AbstractArray{T,N}, λ::T, κ::T, nsources::Int, x₀::Int) where {T,N}
@@ -133,33 +146,25 @@ module Losses
         f∇O = score_mismatch(f,x₀)
 
         # Variance term
-        σₒ² = sum.(eachslice(selectdim(ϕ,1,x₀),dims=ndims(ϕ)-1)) |> var
+        σₒ² = selectdim(sum(ϕ,dims=2),1,x₀) |> var
 
         return mean(trJ²./2 .+ f⊥Hf./2 .+ f∇O) + σₒ²/2, st, (;)
     end
 
     function phi4loss_KL2stein(model,ps,st,ϕ::AbstractArray{T,N}, λ::T, κ::T, nsources::Int, x₀::Int) where {T,N}
-        func = StatefulLuxLayer(model,ps,st)
-        f = func(ϕ)
+        # Stein operator
+        f, Tr_f = Stein(model,ps,st,ϕ,λ,κ,nsources) 
         
-        # Hessian term
-        f⊥Hf = fHf(ϕ,f,λ,κ)[:] 
-
-        # Stochastic Jacobian trace
-        trJ² = mean(
-            [trace_J2(func,ϕ) for _ in 1:nsources] |> stack,
-            dims=2
-        )[:]
-
         # Score mismatch
         f∇O = score_mismatch(f,x₀)
 
         # Variance term
         σₒ² = sum.(eachslice(selectdim(ϕ,1,x₀),dims=ndims(ϕ)-1)) |> var
 
-        return mean(trJ²./2 .+ f⊥Hf./2 .+ f∇O) + σₒ²/2, st, (;)
+        return mean((Tr_f .^ 2)./2 .+ f∇O) + σₒ²/2, st, (;)
     end
 
+    export show_keys
     export neighbor_sum, staple_sum, Actionλϕ⁴, Forceλϕ⁴, fHf
     export batched_jvp, trace_J, trace_J2
     export Stein, score_mismatch
