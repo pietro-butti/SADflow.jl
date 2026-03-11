@@ -1,5 +1,5 @@
 module FourierNeuralOperator
-
+##
     using Lux, NNlib
     using LuxCore, Random
     using FFTW
@@ -21,6 +21,7 @@ module FourierNeuralOperator
         end
 
         function (n::SpectralConv)(x̃::AbstractArray{T,N}, ps, st) where {T,N}
+            @assert size(x̃,N-1)==n.n_features
             D = N-2
             Ks = size(ps.weight)[1:D]
 
@@ -32,13 +33,14 @@ module FourierNeuralOperator
         end
     ## ====================================================================
 
-
     FourierNeuralLayer(vol,C,r; activation=σ) = Chain((
         fourier = Parallel(+;
             spectral = Chain((
-                fft   = WrappedFunction(fft),
+                fft   = WrappedFunction(x->fft(x,1:(ndims(x)-1))),
                 sconv = SpectralConv(vol,C,r),
-                ifft  = WrappedFunction(ifft) 
+                ifft  = WrappedFunction(x->ifft(x,1:(ndims(x)-1))),
+                cat   = WrappedFunction(x->cat(real.(x),imag.(x),dims=ndims(x)-1)),
+                down  = Conv((1,1),2*C=>C, use_bias=false) 
             )), 
             skip = Conv((1,1),C=>C,use_bias=false)
         ),
