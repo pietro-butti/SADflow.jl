@@ -4,10 +4,13 @@ authors = ["Pietro Butti <pietro.butti.fl@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+ADerrors = "5e92007d-7bf1-471c-8ceb-4591b8b567a9"
+BDIO = "375f315e-f2c4-11e9-2ef9-134f02f79e27"
 ConcreteStructs = "2569d6c7-a4a2-43d3-a901-331e8e4be471"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FastTransformsForwardDiff = "77fa7db0-1c81-401d-9fde-3592fc42b8bc"
+FormalSeries = "a55ae9b5-0907-4af6-81ab-c6ed2f8e0777"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
@@ -22,10 +25,13 @@ StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 WeightInitializers = "d49dbf32-c5c2-4618-8acc-27bb2598ef2d"
 
 [compat]
+ADerrors = "0.1.0"
+BDIO = "0.1.0"
 ConcreteStructs = "0.2.3"
 Enzyme = "0.13.86"
 FFTW = "1.10.0"
 FastTransformsForwardDiff = "0.0.2"
+FormalSeries = "1.5.0"
 ForwardDiff = "0.10.39"
 LinearAlgebra = "1.11.0"
 Lux = "1.22.1"

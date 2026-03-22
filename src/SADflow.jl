@@ -11,8 +11,9 @@ module SADflow
         export show_keys
         export neighbor_sum, staple_sum, Actionλϕ⁴, Forceλϕ⁴, fHf
         export vjv, vjjv, trJ, trJJ
-
+        export free_propagator, sumnorm, reweight_corr, compute_weight
+    
     include("Metrics.jl")
         using .Metrics
-        export KL2, Obs
+        export KL2, KL2sq, Obs
 end
