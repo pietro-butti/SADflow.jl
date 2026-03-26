@@ -9,7 +9,7 @@ using Lattice, SADflow
 
 ## ======================================================
     folder   = "/Users/pietro/code/software/SADflow/.local_sketches/"
-    ens_name = "2d_l0.0_k0.12461_L_32_8" 
+    ens_name = "2d_l0.0_k0.12461_L_8_8" 
     
     data = load(joinpath(folder,"$ens_name.jld2"))
 
@@ -41,10 +41,11 @@ using Lattice, SADflow
     V = prod(vol)
     net(vol) = Chain(
         FlattenLayer(),
-        Dense(V =>32),
-        Dense(32=>32),
-        Dense(32=>32),
-        Dense(32=>V),
+        Dense(V =>V),
+        # Dense(V =>32),
+        # Dense(32=>32),
+        # Dense(32=>32),
+        # Dense(32=>V),
         ReshapeLayer((vol...,1)),
     )
     model = net(vol)
@@ -71,7 +72,7 @@ using Lattice, SADflow
 ## ---------------------------- TRAINING --------------------------
     # Metaparameters -----------
         NSRC     = 1
-        η        = 0.00001f0
+        η        = 0.001f0
         λreg     = 0.01f0
         BSIZE    = 50
         NSAMPLES = 1000

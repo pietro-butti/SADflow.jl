@@ -12,6 +12,7 @@ module SADflow
         export neighbor_sum, staple_sum, Actionλϕ⁴, Forceλϕ⁴, fHf
         export vjv, vjjv, trJ, trJJ
         export free_propagator, sumnorm, reweight_corr, compute_weight
+        export _action, _grad_S, _Hvp, deltalike, obs, Δf, LangevinStep, AdjointLangevinStep, FeynmanKac
     
     include("Metrics.jl")
         using .Metrics

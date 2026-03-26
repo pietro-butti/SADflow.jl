@@ -58,6 +58,28 @@ module Utils
         fHf(ϕ::AbstractArray{T,N},f::AbstractArray{T,N},λ::T,κ::T) where {T,N} = (
             -2κ .* f .* staple_sum(f) .+ (T(2) - 4λ .+ 12λ .* ϕ .^ 2) .* f .^2
         ) |> x->sum(x; dims=1:N-1)
+    ## --- Implicit functions for 2D -------------------------------------
+        _action(λ,κ) = ϕ ->
+            ϕ.^2 .+ λ .* (ϕ.^2 .- 1).^2 .+
+            -2κ .* ϕ .* (
+                circshift(ϕ,(-1,0)) .+ circshift(ϕ,(0,-1))
+            ) |> sum
+
+        _grad_S(λ,κ) = ϕ -> 
+            2ϕ .+ 4λ .* (ϕ.^2 .- 1) .* ϕ .+ 
+            -2κ .* (
+                circshift(ϕ,(-1,0)) .+ circshift(ϕ,(1,0)) .+
+                circshift(ϕ,(0,-1)) .+ circshift(ϕ,(0,1)) 
+            )
+
+        _Hvp(λ,κ) = (ϕ,v) -> 
+            (2 .- 4λ .+ 12λ .* ϕ.^2) .* v .+ 
+            -2κ .* (
+                circshift(v,(-1,0)) .+ circshift(v,(1,0)) .+
+                circshift(v,(0,-1)) .+ circshift(v,(0,1)) 
+            )
+        
+        obs(z; x₀=1) = dsum(z,dims=2)[x₀]         
     ## ===================================================================
 
     ## ======================= Hutchinson's trace =========================
@@ -89,6 +111,27 @@ module Utils
             trJJ(Random.default_rng(), func,z; ns=ns)
     ## ====================================================================
 
+    ## ========================= Langevin methods ================================
+        LangevinStep(Zₜ, ∇S, Δt, ηₜ) = Zₜ .- Δt .* ∇S .+ sqrt(2Δt)*ηₜ
+        AdjointLangevinStep(Aₛ, Hₛv, Δt, d₀)   = Aₛ .+ Δt .* (-Hₛv .+ d₀)
+
+        function FeynmanKac(z₀,η,δt; grad_S=nothing, Hvp=nothing, δ₀=nothing)
+            itr = eachslice(η,dims=ndims(η))
+            (Z_T,traj) = foldl(itr; init=(z₀,())) do (Zₜ,traj), ηₜ
+                Zₜ = LangevinStep(Zₜ,grad_S(Zₜ),δt,ηₜ)
+                (Zₜ,(traj...,Zₜ))
+            end
+
+            A₀ = zeros(eltype(Z_T),size(Z_T)...)
+            int = foldl(reverse(traj); init=A₀) do Aₛ, Zₜ
+                HₛA = Hvp(Zₜ,Aₛ)
+                Aₛ = AdjointLangevinStep(Aₛ,HₛA,δt,δ₀)
+            end
+
+            return int
+        end
+    ## ==========================================================================
+
 
     ## ========================= AD reweigthing ===========================
         # Compute the free scalar propagator on a 1D momentum grid and
@@ -112,6 +155,18 @@ module Utils
             c = map(eachcol(c)) do x; x ./ first(x) end |> stack
         end
 
+        Δf(f0) = fout -> begin
+            c = sumnorm(fout)
+            f = sumnorm(f0)
+            abs.(c .- f) ./ f
+        end
+
+        deltalike(z; xstar=1) = begin
+            δ = zeros(eltype(z),size(z)...)
+            selectdim(δ,1,xstar) .= one(eltype(z))
+            return δ
+        end
+        
 
         function compute_weight(z::AbstractArray{T,N},f,action,obs,trJf) where {T,N}
             # Compute improved confs
@@ -154,5 +209,6 @@ module Utils
     export neighbor_sum, staple_sum, Actionλϕ⁴, Forceλϕ⁴, fHf
     export vjv, vjjv, trJ, trJJ
     export free_propagator, sumnorm, reweight_corr, compute_weight
+    export _action, _grad_S, _Hvp, deltalike, obs, Δf, LangevinStep, AdjointLangevinStep, FeynmanKac
     
 end
