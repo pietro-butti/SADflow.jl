@@ -11,4 +11,8 @@ module Architectures
     include("FourierNeuralOperator.jl")
         using .FourierNeuralOperator
         export SpectralConv, FourierNeuralLayer, FNO
+
+    include("SeriesConvs.jl")
+        using .SeriesConvs
+        export SeriesConv
 end

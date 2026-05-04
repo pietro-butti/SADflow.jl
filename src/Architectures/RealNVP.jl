@@ -71,7 +71,7 @@ module RealNVP
             return ϕ, merge(st, (net=st_net,))
         end
 
-        function (cl::AffineEOCoupling)((ϕ̃,logdetJ̃,ε), ps, st)
+        function (cl::AffineEOCoupling)((ϕ̃,logdetJ̃,ε)::Tuple{AbstractArray, AbstractVector, Series}, ps, st)
             ϕ̃_frozen = ifelse.(st.mask, zero(eltype(ϕ̃)), ϕ̃)
             ϕ̃_active = ifelse.(st.mask, ϕ̃, zero(eltype(ϕ̃)))
 
