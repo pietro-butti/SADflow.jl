@@ -2,6 +2,7 @@ module SADflow
     include("Architectures/Architectures.jl")
         using .Architectures
         export biject, AffineEOCoupling, log_N01, density_loss, dsum, pass_inverse
+        export SeriesConv
         export LatConv2D, FourierFeature, FourierLatConv
         export div_FourierFeature, div_FourierLatConv
         export SpectralConv, FourierNeuralLayer, FNO

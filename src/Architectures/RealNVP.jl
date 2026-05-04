@@ -2,7 +2,7 @@ module RealNVP
     using ConcreteStructs
     using Lux, NNlib, MLUtils
     using StatsBase, Random
-
+    using FormalSeries
 
     ## ------------------------ Helpers ------------------------
         biject(z::AbstractArray{T,N}; dim=1) where {T,N} = begin
@@ -69,6 +69,21 @@ module RealNVP
             ϕ = ifelse.(st.mask, ϕ_active, ϕ)
 
             return ϕ, merge(st, (net=st_net,))
+        end
+
+        function (cl::AffineEOCoupling)((ϕ̃,logdetJ̃,ε), ps, st)
+            ϕ̃_frozen = ifelse.(st.mask, zero(eltype(ϕ̃)), ϕ̃)
+            ϕ̃_active = ifelse.(st.mask, ϕ̃, zero(eltype(ϕ̃)))
+
+            (α, β), st_net = cl.net(ϕ̃_frozen, ps.net, st.net)
+
+            ϕ̃_transformed = @. (1 + ε * α) * ϕ̃_active + ε * β
+            ϕ̃_out = ifelse.(st.mask, ϕ̃_transformed, ϕ̃)
+
+            log_det = @. log(1 + ε * α) * st.mask
+            logdetJ̃ += dsum(log_det; dims=Tuple(1:ndims(ϕ̃)-1))
+
+            return (ϕ̃_out, logdetJ̃, ε), merge(st, (net=st_net,))
         end
 
     ## ----------------------------------------------------------------
