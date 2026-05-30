@@ -1,4 +1,5 @@
 using Pkg; Pkg.activate(".")
+using SADflow
 using Revise 
 using Random, StatsBase, Plots, LinearAlgebra, Pipe, DataFrames, JLD2, Printf, LaTeXStrings, Colors
 using Lux, Optimisers, Zygote
@@ -16,7 +17,7 @@ import ADerrors.err
     data    = load(joinpath(folder,"$ens_name.jld2"))
     vol,λ,κ = data["vol"],data["λ"],data["κ"]
 
-    ϕ = data["ϕ"]
+    ϕ = data["ϕ"] .|> Float64
     
     D = length(vol)
     cfgs = eachslice(ϕ,dims=ndims(ϕ))
@@ -38,8 +39,9 @@ import ADerrors.err
         map(func,confs)    
     end
 
-    Hvp = ziproll(_Hvp(λ,κ))
-    action = _action(λ,κ)
+    Hvp    = _Hvp(λ,κ)    |> ziproll
+    action = _action(λ,κ) |> roll
+    grad_S = _grad_S(λ,κ) |> roll
 
     m²(κ,λ,vol) = (1-2λ)/2κ - 2*length(vol)
     f_free = propagator(κ,1/κ - 2D, vol)
@@ -57,11 +59,11 @@ import ADerrors.err
         V = prod(vol)
         Nₜ = first(vol)
         return @compact(;
-            Znet = Dense(2V=>2,softplus),
-            Rnet = Dense(2V=>1,tanh),
+            Znet = Dense(2Nₜ=>2,softplus),
+            Rnet = Dense(2Nₜ=>Nₜ,softplus),
         ) do x
             @assert ndims(x)==2
-            @assert size(x,1)==2V
+            # @assert size(x,1)==2V
             
             Z,Σ = x |> Znet |> SADflow.biject
             R   = x |> Rnet
@@ -77,28 +79,24 @@ import ADerrors.err
     net = (vol,κ) -> begin
         Nₜ = first(vol)
         Nₓ = prod(vol[2:end])
-        factor = Nₓ/2κ
-
         Chain((
-            fft            = WrappedFunction(batched_ifft),
+            fft            = WrappedFunction(batched_fft),
+            normalization1 = WrappedFunction(x->x./prod(vol)),
             effective_prop = Chain((
+                zero_mom       = WrappedFunction(x -> selectdim(x, 2, 1)),  # (Nₜ,1,B): p=0 only
                 complex_policy = WrappedFunction(riffle_complex), # alternatives: riffle, real, stack+conv
                 flatten        = FlattenLayer(),
                 propagator     = EffectivePropagator(vol),  
             )),
-            # mode_mixing    = Chain(Dense(Nₜ=>8),Dense(8=>Nₜ)),
-            mode_mixing    = Dense(Nₜ=>Nₜ),
             build_source   = WrappedFunction(x->build_source(x,vol)),
             ifft           = WrappedFunction(batched_fft),
-            normalization  = WrappedFunction(x->x*factor),
+            normalization2 = WrappedFunction(x->x.*Nₓ/2κ),
             complex_proj   = Chain(
                 WrappedFunction(stack_complex),
                 Conv((1,1),2=>1,use_bias=false)
             )
         ))
     end
-
-    
 
     model = net(vol,κ)
     seed  = 1994
@@ -113,9 +111,8 @@ import ADerrors.err
 
 
 ## ---------------------------- TRAINING --------------------------
-    fHf(ϕ,f) = @pipe stack(Hvp(ϕ,f)) .* selectdim(f,ndims(ϕ)-1,1) 
-
-
+    fHf(ϕ,f) = stack(Hvp(ϕ,f)) .* selectdim(f,ndims(ϕ)-1,1) 
+    
     function KL2(model,ps,st,z::AbstractArray{T,N}; ns=1, rng=Random.default_rng(),) where {T,N} 
         func = StatefulLuxLayer(model,ps,st)
         f = func(z)
@@ -127,10 +124,28 @@ import ADerrors.err
         return mean(trJ² .+ f_Hf .- 2 .* f∇O), st, (; trJ², f_Hf, f∇O)
     end  
 
+    Stein(func,z; ns=1, rng=Random.default_rng()) = begin
+        divf = trJ(rng, func, z; ns=ns)
+
+        f = func(z)
+        fitr = @pipe selectdim(f,ndims(f)-1,1) |> eachslice(_,dims=ndims(f)-1)
+        f∇S = grad_S(z) .⋅ fitr
+
+        divf .- f∇S
+    end
+    function PINN(model,ps,st,z::AbstractArray{T,N}; ns=1, rng=Random.default_rng(), Oav=nothing) where {T,N} 
+        func = StatefulLuxLayer(model,ps,st)
+        Tᵣf = Stein(func,z; ns=ns, rng=rng)
+
+        O₀ = source.(eachslice(z,dims=N))
+        ΔO₀ = O₀  .- (isnothing(Oav) ? mean(O₀) : Oav)
+
+        return norm(Tᵣf .+ ΔO₀).^2, st, (; trJ², f_Hf, f∇O)
+    end 
 ##
     # Metaparameters -----------
         NSRC     = 1
-        η        = 0.01
+        η        = 0.1
         λreg     = 0.
         BSIZE    = 100
         SAMPLES_PER_EPOCH = 1000
@@ -139,6 +154,7 @@ import ADerrors.err
     LOSS = (args...) -> KL2(args...; ns=NSRC, rng=rng)
 
     opt = OptimiserChain(WeightDecay(λreg),Adam(η))
+    # opt = AdamW(η)
 
     ts = Training.TrainState(model, ps, st, opt);
 
@@ -276,60 +292,39 @@ import ADerrors.err
 
 ## --- Correlator ------------------------------------    
     ff = propagator(m²(κ,λ,D),vol)
+    # tag = ens_name*"2"
+    tag = "scemo2"
+    ε = Series((0.,1.))
 
     # --- 2pt function 
         x = sumvol(ϕ,dims=Tuple(2:D))[:,1,:]
-        corr2 = Float64.(x[1:1,:] .* x) |> uwc
+        corr2 = @pipe x[1:1,:] .* x |> uwcorr(_,tag)
         corr2 ./= first(corr2)
         uwerr.(corr2)
 
     # Exact reweighting
-        # ε = Series((0.,1.))
-        # c2 = dsum(ϕ .+ ε .* ff,dims=(2,3)) 
-        # corrw = map(eachrow(c2)) do r uwreal(Float64.(getindex.(r,2)[:]),ens_name) end
-        # corrw ./= first(corrw)
-        # uwerr.(corrw)
-
         M2 = m²(κ,0.,D) + 0.5
-        ff = propagator(M2,vol)
+        ff = stack([propagator(M2,vol)[:,:,1:1] for _ in axes(ϕ,ndims(ϕ))])
 
-        ε = Series((0.,1.))
-        pt = dsum(ϕ .+ ε .* ff,dims=D+1); 
-        new = eachslice(pt,dims=ndims(pt));
-        w = -(action.(new) .- ε .* source.(new)) .+ action.(selectdim.(cfgs,3,1)) .|> exp;
-        w̃ = uw(w)
-
-        y = reshape(w,1,:) .* dsum(pt,dims=Tuple(2:D))
-        corrw = uwcorr(y,ens_name) ./ w̃
+        w = compute_weights(ϕ,ff,action,roll(source))
+        y = reshape(w,1,:) .* dsum(ϕ .+ ε.*ff,dims=Tuple(2:D+1))
+        corrw = uwcorr(y,ens_name) ./ uwreal(w,ens_name)
 
         corrw = getindex.(corrw,2)
         corrw ./= first(corrw)
         uwerr.(corrw)
 
-
     # Improved reweigthing
         func = StatefulLuxLayer(model,ts.parameters,ts.states)
-        ε = Series((0.0,1.0))
+        f = func(ϕ)
 
-        # # analytical trace
-        # Jac = batched_jacobian(func, AutoForwardDiff(), ϕ)
-        # trj = map(tr,eachslice(Jac,dims=3))
-
-        # hutchinson trace
-        trj = @time trJ(rng,func,ϕ; ns=1)
+        # Jac = batched_jacobian(func, AutoForwardDiff(), ϕ); trj = map(tr,eachslice(Jac,dims=3))
+        trj = @time trJ(rng,func,ϕ; ns=5)
         trj = mean(trj,dims=2)
-
-        pt = Float64.(ϕ) .+ ε .* func(Float64.(ϕ));
-        new = map(eachslice(pt,dims=ndims(pt))) do z z[:,:,1] end;
-        cfg = map(cfgs) do z Float64.(z[:,:,1]) end;
-
-        w = -(action.(new) .- ε .* source.(new)) .+ action.(cfg)
-        w .+= ε .* trj
-        w = exp.(w)
-        w̃ = uw(w)
-
-        y = reshape(w,1,:) .* dsum(pt,dims=Tuple(2:D+1))
-        corri = uwcorr(y,ens_name) ./ w̃
+        
+        w = compute_weights(ϕ,f,action,roll(source); divf=trj)
+        y = reshape(w,1,:) .* dsum(ϕ .+ ε.*f,dims=Tuple(2:D+1))
+        corri = uwcorr(y,ens_name) ./ uwreal(w,ens_name)
 
         corri = getindex.(corri,2)
         corri ./= first(corri)
@@ -340,7 +335,7 @@ import ADerrors.err
     p = plot(
         formatter=:latex,framestyle=:box,
         ylim=(off,2),
-        xlim=(1,20),
+        # xlim=(1,20),
         yscale=:log10,
         # tickfontsize=10,
         ylabel=L"C(x_0)",
@@ -363,9 +358,9 @@ import ADerrors.err
     scatter!(p,x,y;k...,ms=10,c=jc.blue,msc=jc.blue,label="2pts function")
     # plot!(p,x,y;c=jc.blue,label="",alpha=0.4)
     
-    y,k = plottable(corrw; off=off)
-    scatter!(p,x.-0.2,y;k...,ms=7,m=:utriangle,c=jc.green,msc=jc.green,label="analytical")
-    # plot!(p,x.-0.2,y;c=jc.green,label="",alpha=0.2)
+    # y,k = plottable(corrw; off=off)
+    # scatter!(p,x.-0.2,y;k...,ms=7,m=:utriangle,c=jc.green,msc=jc.green,label="analytical")
+    # # plot!(p,x.-0.2,y;c=jc.green,label="",alpha=0.2)
 
     y,k = plottable(corri; off=off)
     scatter!(p,x.+0.2,y;k...,ms=7,m=:dtriangle,c=jc.red,msc=jc.red,label="effective prop.")
@@ -376,9 +371,8 @@ import ADerrors.err
 ##
     p2 = plot(
         formatter=:latex,framestyle=:box,
-        xlims=(1,20),
-        # ylims=(0.3,0.38),
-        # ylims=(0,1.),
+        # xlims=(1,20),
+        ylims=(0.5,1.),
         # tickfontsize=10,
         ylabel=L"m_\mathrm{eff}",
         xlabel=L"x_0",
@@ -395,8 +389,8 @@ import ADerrors.err
     
     x = 1:first(vol)
 
-    ym = meff(corrw); uwerr.(ym)
-    scatter!(p2,x.+0.1,value.(ym),yerrors=err.(ym),ms=10,c=jc.green,msc=jc.green,m=:utriangle,label="")
+    # ym = meff(corrw); uwerr.(ym)
+    # scatter!(p2,x.+0.1,value.(ym),yerrors=err.(ym),ms=10,c=jc.green,msc=jc.green,m=:utriangle,label="")
 
     ym = meff(corr2); uwerr.(ym)
     scatter!(p2,value.(ym),yerrors=err.(ym),m=10,c=jc.blue,msc=jc.blue,label="")
@@ -404,6 +398,7 @@ import ADerrors.err
     ym = meff(corri); uwerr.(ym)
     scatter!(p2,x.-0.1,value.(ym),yerrors=err.(ym),ms=10,c=jc.red,msc=jc.red,m=:dtriangle,label="")
 ##
-    plt = plot(p,p2,layout=(2,1),size=(900,1100))
+
+plt = plot(p,p2,layout=(2,1),size=(900,1100))
     # savefig(plt,joinpath(PATH,"CORRELATOR_NN_$(ens_name).pdf"))
 ## ---------------------------------------------------

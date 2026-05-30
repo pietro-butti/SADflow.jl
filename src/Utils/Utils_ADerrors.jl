@@ -19,6 +19,10 @@ import ADerrors.uwerr
 uwerr(X::Series{uwreal,N}) where N = for i in 1:N uwerr(X[i]) end
 uwerr(::Missing) = 0
 
+
+uwerr(X::Series{uwreal,N},wpm...) where N = for i in 1:N uwerr(X[i],wmp...) end
+uwerr(::Missing,wmp...) = 0
+
 # --- Missing value for plotting -------------
 import ADerrors: err, value
 ADerrors.err(::Missing) = 0

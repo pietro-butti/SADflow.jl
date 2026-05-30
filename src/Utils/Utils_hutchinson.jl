@@ -17,7 +17,7 @@ vjjv = (rng, func, z)-> begin
     Jη  = jacobian_vector_product(func, AutoForwardDiff(), z, η)
     JJη = jacobian_vector_product(func, AutoForwardDiff(), z, Jη)
     @assert ndims(η)==ndims(JJη)
-    dsum(η .* Jη, dims=Tuple(1:ndims(η)-1))
+    dsum(η .* JJη, dims=Tuple(1:ndims(η)-1))
 end
 
 trJJ(rng, func, z; ns=1) = 

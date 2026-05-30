@@ -18,6 +18,13 @@ module SeriesConvs
         (; weight = randn(rng, Float32, l.kernel_size..., l.in_chs, l.out_chs))
     Lux.initialstates(::AbstractRNG, ::SeriesConv) = (;)
 
+    # default for T<:Float and Reactant-compatible
+    function (l::SeriesConv)(x::AbstractArray{T,N}, ps, st) where {T,N}
+        x = NNlib.pad_circular(x, l.pad)
+        cdims = DenseConvDims(x, ps.weight; padding=0)
+        return NNlib.conv(x, ps.weight, cdims), st
+    end
+
     function (l::SeriesConv)(x::AbstractArray{<:Series{T,O}}, ps, st) where {T,O}
         # do the circular padding
         x = pad_circular(x, l.pad)
@@ -35,12 +42,6 @@ module SeriesConvs
 
         return y, st
     end
-
-    function (l::SeriesConv)(x::AbstractArray{<:AbstractFloat}, ps, st)
-        cdims = DenseConvDims(x, ps.weight; padding=1)
-        return NNlib.conv(x, ps.weight, cdims), st
-    end
-
 
     export SeriesConv
 

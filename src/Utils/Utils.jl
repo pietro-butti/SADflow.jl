@@ -63,7 +63,7 @@ module Utils
     include("Utils_lambdaphi4.jl")
         export nn, _action, _grad_S, _Hvp, _fHf, propagator, source
 
-
-    
+    include("Utils_reweighting.jl")
+        export compute_weights, reweight    
 
 end
