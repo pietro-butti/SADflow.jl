@@ -16,7 +16,4 @@ module SADflow
         export nn, _action, _grad_S, _Hvp, _fHf, propagator, source
         export compute_weights, reweight
 
-    # include("Metrics.jl")
-    #     using .Metrics
-    #     export KL2, KL2sq, Obs
 end
