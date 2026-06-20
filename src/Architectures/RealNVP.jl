@@ -2,7 +2,6 @@ module RealNVP
     using ConcreteStructs
     using Lux, NNlib, MLUtils
     using StatsBase, Random
-    using FormalSeries
 
     ## ------------------------ Helpers ------------------------
         biject(z::AbstractArray{T,N}; dim=1) where {T,N} = begin
@@ -26,7 +25,7 @@ module RealNVP
             parity = l.iseven ? iseven : isodd
             mask = [parity(sum(Tuple(I))) for I in CartesianIndices(l.dims)]
 
-            return (; mode=:forward, mask , net=Lux.initialstates(rng, l.net))
+            return (; mode=:forward, mask, net=Lux.initialstates(rng, l.net))
         end
 
         apply_and_log_det(::Val{:forward}, s, t, z) = (z .* exp.(s) .+ t, s)
@@ -71,19 +70,15 @@ module RealNVP
             return ϕ, merge(st, (net=st_net,))
         end
 
-        function (cl::AffineEOCoupling)((ϕ̃,logdetJ̃,ε)::Tuple{AbstractArray, AbstractVector, Series}, ps, st)
-            ϕ̃_frozen = ifelse.(st.mask, zero(eltype(ϕ̃)), ϕ̃)
-            ϕ̃_active = ifelse.(st.mask, ϕ̃, zero(eltype(ϕ̃)))
+        function (cl::AffineEOCoupling)(x, N_layers::Int, ps, st)
+            st_odd  = st
+            st_even = merge(st, (; mask=.!st.mask)) 
 
-            (α, β), st_net = cl.net(ϕ̃_frozen, ps.net, st.net)
+            for i in 1:N_layers
+                x, st = cl(x, ps, isodd(i) ? st_odd : st_even)
+            end
 
-            ϕ̃_transformed = @. (1 + ε * α) * ϕ̃_active + ε * β
-            ϕ̃_out = ifelse.(st.mask, ϕ̃_transformed, ϕ̃)
-
-            log_det = @. log(1 + ε * α) * st.mask
-            logdetJ̃ += dsum(log_det; dims=Tuple(1:ndims(ϕ̃)-1))
-
-            return (ϕ̃_out, logdetJ̃, ε), merge(st, (net=st_net,))
+            return x, merge(st, (; mask=st.mask,))
         end
 
     ## ----------------------------------------------------------------
